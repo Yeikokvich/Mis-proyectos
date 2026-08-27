@@ -1,0 +1,8 @@
+Transaction_ID-Transaction_Type-Value
+1001-Crédito-200000
+1002-Crédito-158000
+1003-Crédito-60000
+1004-Consignación-800000
+1005-Consignación-100000
+1006-Consignación-120000
+1007-Crédito-180000
