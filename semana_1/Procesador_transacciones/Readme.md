@@ -1,153 +1,39 @@
-<<<<<<< HEAD
-# Análisis de Fragilidad del Procesador de Transacciones
+# Análisis de Fragilidad: Programación Estructurada y el Riesgo de Escalabilidad
 
-## Descripción
-
-El programa analizado tiene como objetivo leer transacciones almacenadas en un archivo de texto, calcular su valor total y permitir su filtrado según el tipo de transacción.
-
-Aunque el programa funciona correctamente cuando recibe datos con el formato esperado, presenta varios puntos de fragilidad que pueden provocar errores ante entradas incompletas, malformadas o diferentes a las previstas originalmente.
+Este documento presenta un análisis crítico sobre la fragilidad de la **Programación Estructurada (PE)** orientada a procedimientos cuando se enfrenta al crecimiento de requerimientos, específicamente al escalar de un modelo simple a manejar **10 o más tipos de transacciones diferentes**.
 
 ---
 
-## Fragilidades Identificadas
+##  El Problema Estructural al Escalar a Múltiples Tipos
 
-### 1. Validación inadecuada de líneas vacías
+En el paradigma de la programación estructurada tradicional, los datos se representan como estructuras pasivas y planas (como diccionarios o tuplas) que están completamente desconectadas de las funciones que los manipulan. 
 
-La comprobación de líneas vacías se realiza mediante:
-
-`if not linea`
-
-Sin embargo, una línea que contiene únicamente un salto de línea (`\n`) sigue siendo una cadena no vacía, por lo que puede superar esta validación.
-
-Posteriormente, al dividir la línea y acceder directamente a posiciones como `partes[1]` o `partes[2]`, el programa puede generar un `IndexError` si no existen suficientes elementos.
-
-**Consecuencia:** El programa puede detener su ejecución al encontrar líneas vacías o con una estructura incompleta.
-
-**Mejora propuesta:** Limpiar y validar cada línea antes de procesarla, además de comprobar que contenga la cantidad de elementos esperada.
+Cuando el sistema crece para soportar múltiples casuísticas (ej. créditos, débitos, comisiones, transferencias, reembolsos, inversiones, impuestos, etc.), este desacoplamiento extremo genera graves problemas de mantenimiento y depuración (*debugging*).
 
 ---
 
-### 2. Ausencia de limpieza de cadenas
+##  ¿Por qué tener datos separados de la lógica crea un riesgo crítico de *debugging*?
 
-Los datos obtenidos del archivo no son limpiados antes de almacenarse. Esto puede provocar que espacios adicionales o caracteres como `\n` formen parte de los valores procesados.
+### 1. Dispersión Masiva de Condicionales (*If/Else Hell*)
+Al no poseer la lógica encapsulada dentro de la estructura de datos, cada función de procesamiento (`calcular_total`, `validar_reglas`, `aplicar_impuestos`, `filtrar_por_tipo`) se ve obligada a implementar bloques masivos de condiciones múltiples (`if/elif/else`) para evaluar qué hacer según el tipo de transacción. 
+* **El riesgo de depuración:** Si se añade un tipo de transacción número 11, el desarrollador debe cazar y modificar de forma manual **todas** las funciones dispersas en el código. Olvidar actualizar tan solo un bloque `elif` genera fallos silenciosos o excepciones en tiempo de ejecución difíciles de rastrear.
 
-Por ejemplo:
+### 2. Pérdida de Localidad de Referencia y Trazabilidad Rota
+En un modelo estructurado, los datos fluyen como parámetros mutables a través de una tubería de funciones procedurales independientes. 
+* **El riesgo de depuración:** Cuando una transacción de tipo 7 llega con un valor corrupto o una clave faltante (`KeyError`), el rastreo del error (*stack trace*) solo indica dónde falló la función final (por ejemplo, al sumar), pero no ofrece pistas sobre cuál de las múltiples funciones intermedias alteró o malinterpretó la estructura del diccionario original. El desarrollador debe recorrer mentalmente todo el flujo procedural de arriba a abajo.
 
-`"Crédito"` y `"Crédito "`
+### 3. Ausencia de Contratos de Datos y Tipado Estricto
+Los diccionarios planos permiten que cualquier función modifique las claves o inyecte nuevos campos de manera arbitraria (por ejemplo, un módulo puede usar `"value"`, otro `"monto"`, y otro `"valor_neto"`).
+* **El riesgo de depuración:** Al no existir un esquema encapsulado o validación de tipos por entidad, las discrepancias en los nombres de las claves o en los tipos de datos (como pasar un string en lugar de un entero) no se detectan al escribir el código, manifestándose como errores inesperados en producción al procesar combinaciones complejas de transacciones.
 
-serían considerados valores diferentes en una comparación exacta.
-
-**Consecuencia:** Los filtros y comparaciones pueden producir resultados incorrectos aunque visualmente los datos parezcan iguales.
-
-**Mejora propuesta:** Normalizar los datos eliminando espacios y saltos de línea innecesarios antes de almacenarlos o compararlos.
-
----
-
-### 3. Conversión numérica sin manejo de errores
-
-El programa convierte directamente el valor de cada transacción mediante:
-
-`int(partes[2])`
-
-Si el campo contiene caracteres no numéricos, está vacío o posee un formato inesperado, Python generará un `ValueError`.
-
-**Consecuencia:** Una única transacción malformada puede detener completamente el procesamiento del archivo.
-
-**Mejora propuesta:** Validar el contenido antes de realizar la conversión o implementar un mecanismo de manejo de excepciones que permita identificar y omitir registros inválidos.
+### 4. Violación del Principio de Responsabilidad Única a Nivel de Módulo
+A medida que aumentan los tipos de transacciones, las funciones procedurales crecen en complejidad ciclomática para intentar resolver las reglas de negocio de todos los tipos en un solo lugar.
+* **El riesgo de depuración:** Las funciones se vuelven monolíticas. Aislar un error en las reglas de cálculo específicas para el tipo 4 implica leer y depurar código que mezcla la lógica de los otros 9 tipos, aumentando exponencialmente la carga cognitiva del desarrollador.
 
 ---
 
-### 4. Dependencia de una ruta de archivo fija
+##  Conclusión Arquitectónica
 
-Si la ubicación del archivo se encuentra escrita directamente dentro del programa (*hardcoded*), el funcionamiento queda ligado a una estructura específica de carpetas o a un equipo determinado.
+La separación estricta entre datos pasivos y lógica procedural funciona adecuadamente en scripts pequeños y lineales. Sin embargo, al escalar en complejidad de dominio (múltiples tipos de datos), esta aproximación se vuelve sumamente **frágil**, convirtiendo el *debugging* en una tarea costosa y propensa a errores humanos. 
 
-**Consecuencia:** El programa pierde portabilidad y resulta más difícil reutilizarlo, probarlo o ejecutarlo en otros entornos.
-
-**Mejora propuesta:** Permitir que la ruta o el nombre del archivo sean proporcionados como parámetros externos.
-
----
-
-## Conclusión
-
-El programa cumple con sus funciones principales bajo condiciones controladas, pero depende en gran medida de que el archivo de entrada tenga exactamente la estructura esperada.
-
-Las principales fragilidades están relacionadas con la falta de validación y normalización de los datos, el manejo limitado de errores y la dependencia de valores definidos directamente en el código.
-
-La implementación de validaciones previas, manejo de excepciones y parametrización permitiría aumentar la **robustez**, **mantenibilidad** y **reutilización** del programa sin modificar su propósito original.
-=======
-# Análisis de Fragilidad del Procesador de Transacciones
-
-## Descripción
-
-El programa analizado tiene como objetivo leer transacciones almacenadas en un archivo de texto, calcular su valor total y permitir su filtrado según el tipo de transacción.
-
-Aunque el programa funciona correctamente cuando recibe datos con el formato esperado, presenta varios puntos de fragilidad que pueden provocar errores ante entradas incompletas, malformadas o diferentes a las previstas originalmente.
-
----
-
-## Fragilidades Identificadas
-
-### 1. Validación inadecuada de líneas vacías
-
-La comprobación de líneas vacías se realiza mediante:
-
-`if not linea`
-
-Sin embargo, una línea que contiene únicamente un salto de línea (`\n`) sigue siendo una cadena no vacía, por lo que puede superar esta validación.
-
-Posteriormente, al dividir la línea y acceder directamente a posiciones como `partes[1]` o `partes[2]`, el programa puede generar un `IndexError` si no existen suficientes elementos.
-
-**Consecuencia:** El programa puede detener su ejecución al encontrar líneas vacías o con una estructura incompleta.
-
-**Mejora propuesta:** Limpiar y validar cada línea antes de procesarla, además de comprobar que contenga la cantidad de elementos esperada.
-
----
-
-### 2. Ausencia de limpieza de cadenas
-
-Los datos obtenidos del archivo no son limpiados antes de almacenarse. Esto puede provocar que espacios adicionales o caracteres como `\n` formen parte de los valores procesados.
-
-Por ejemplo:
-
-`"Crédito"` y `"Crédito "`
-
-serían considerados valores diferentes en una comparación exacta.
-
-**Consecuencia:** Los filtros y comparaciones pueden producir resultados incorrectos aunque visualmente los datos parezcan iguales.
-
-**Mejora propuesta:** Normalizar los datos eliminando espacios y saltos de línea innecesarios antes de almacenarlos o compararlos.
-
----
-
-### 3. Conversión numérica sin manejo de errores
-
-El programa convierte directamente el valor de cada transacción mediante:
-
-`int(partes[2])`
-
-Si el campo contiene caracteres no numéricos, está vacío o posee un formato inesperado, Python generará un `ValueError`.
-
-**Consecuencia:** Una única transacción malformada puede detener completamente el procesamiento del archivo.
-
-**Mejora propuesta:** Validar el contenido antes de realizar la conversión o implementar un mecanismo de manejo de excepciones que permita identificar y omitir registros inválidos.
-
----
-
-### 4. Dependencia de una ruta de archivo fija
-
-Si la ubicación del archivo se encuentra escrita directamente dentro del programa (*hardcoded*), el funcionamiento queda ligado a una estructura específica de carpetas o a un equipo determinado.
-
-**Consecuencia:** El programa pierde portabilidad y resulta más difícil reutilizarlo, probarlo o ejecutarlo en otros entornos.
-
-**Mejora propuesta:** Permitir que la ruta o el nombre del archivo sean proporcionados como parámetros externos.
-
----
-
-## Conclusión
-
-El programa cumple con sus funciones principales bajo condiciones controladas, pero depende en gran medida de que el archivo de entrada tenga exactamente la estructura esperada.
-
-Las principales fragilidades están relacionadas con la falta de validación y normalización de los datos, el manejo limitado de errores y la dependencia de valores definidos directamente en el código.
-
-La implementación de validaciones previas, manejo de excepciones y parametrización permitiría aumentar la **robustez**, **mantenibilidad** y **reutilización** del programa sin modificar su propósito original.
->>>>>>> b43820f7ba69c03315e99a54e5757f2122c2e6f7
+La solución estructural natural ante este escenario de escalabilidad es evolucionar hacia paradigmas más cohesionados, como la **Programación Orientada a Objetos (POO)** —donde cada tipo de transacción encapsula sus propios datos y su propia lógica de comportamiento mediante polimorfismo—, eliminando por completo los gigantescos árboles de decisiones condicionales.
