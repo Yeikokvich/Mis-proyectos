@@ -1,5 +1,6 @@
 import json
 
+
 class TransaccionBase:
     """Define datos y comportamiento comun de las transacciones."""
 
@@ -143,7 +144,6 @@ def leer_transacciones(nombre_archivo):
                         "tipo de transaccion no reconocido"
                     )
 
-
                 else:
                     print(
                         f"Se omitio la transaccion {id_transaccion}: {error}"
@@ -152,26 +152,109 @@ def leer_transacciones(nombre_archivo):
     return transacciones
 
 
-def ejecutar_sistema():
-    """Ejecuta lectura, calculo y salida de datos."""
-
-    # Lee archivo principal de transacciones.
-    transacciones = leer_transacciones("transactions.txt")
+def mostrar_transacciones(transacciones):
+    """Muestra transacciones y su impacto."""
 
     print("\n--- Transacciones cargadas ---")
 
     for transaccion in transacciones:
-        # Calcula impacto segun tipo de objeto.
         print(
             transaccion.obtener_informacion(),
             "-> impacto:",
             transaccion.calcular_impacto()
         )
-        datos_transaccion = {
-        "id": transaccion.id_transaccion,
-        "monto": transaccion.monto
-    }
 
+
+def serializar_transacciones(transacciones):
+
+
+    datos_transacciones = {}
+
+    for transaccion in transacciones:
+
+
+        if isinstance(transaccion, TransaccionCredito):
+            tipo = "CREDITO"
+
+        elif isinstance(transaccion, TransaccionDebito):
+            tipo = "DEBITO"
+
+        elif isinstance(transaccion, TransaccionEfectivo):
+            tipo = "EFECTIVO"
+
+        datos_transacciones[transaccion.id_transaccion] = {
+            "tipo": tipo,
+            "monto": transaccion.monto
+        }
+
+    texto_json = json.dumps(
+        datos_transacciones,
+        indent=4
+    )
+
+    return texto_json
+
+
+def mostrar_json(texto_json):
+    """Muestra cadena JSON."""
+
+    print("\n--- Serializacion JSON ---")
+    print(texto_json)
+
+
+def deserializar_transacciones(texto_json):
+
+    datos_recuperados = json.loads(texto_json)
+
+    transacciones_recuperadas = []
+
+    for id_transaccion, datos in datos_recuperados.items():
+
+        transaccion = crear_transaccion(
+            id_transaccion,
+            datos["tipo"],
+            datos["monto"]
+        )
+
+        transacciones_recuperadas.append(transaccion)
+
+    return transacciones_recuperadas
+
+
+def mostrar_transacciones_recuperadas(transacciones):
+
+    print("\n--- Deserializacion JSON ---")
+
+    for transaccion in transacciones:
+        print(transaccion.obtener_informacion())
+
+
+def ejecutar_sistema():
+    """Ejecuta y coordina las funciones del sistema."""
+
+    transacciones = leer_transacciones(
+        "transactions.txt"
+    )
+
+    mostrar_transacciones(
+        transacciones
+    )
+
+    texto_json = serializar_transacciones(
+        transacciones
+    )
+
+    mostrar_json(
+        texto_json
+    )
+
+    transacciones_recuperadas = deserializar_transacciones(
+        texto_json
+    )
+
+    mostrar_transacciones_recuperadas(
+        transacciones_recuperadas
+    )
 
 
 if __name__ == "__main__":
